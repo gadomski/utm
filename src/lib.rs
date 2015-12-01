@@ -23,7 +23,7 @@ const WGS84: Ellipsoid = Ellipsoid {
 pub fn to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f64, f64) {
     let latitude = latitude * PI / 180.0;
     let longitude = longitude * PI / 180.0;
-    radians_to_utm_wgs64(latitude, longitude, zone) 
+    radians_to_utm_wgs84(latitude, longitude, zone) 
 }
 
 /// Converts a latitude and longitude in radians to UTM coordinates using the WGS84 ellipsoid.
@@ -32,12 +32,12 @@ pub fn to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f64, f64) 
 ///
 /// ```
 /// use std::f64::consts::PI;
-/// use utm::to_utm_wgs84;
+/// use utm::radians_to_utm_wgs84;
 /// let latitude = 40.62 * PI / 180.0;
 /// let longitude = -123.45 * PI / 180.0;
-/// let (northing, easting, meridian_convergence) = to_utm_wgs84(latitude, longitude, 10);
+/// let (northing, easting, meridian_convergence) = radians_to_utm_wgs84(latitude, longitude, 10);
 /// ```
-pub fn radians_to_utm_wgs64(latitude: f64, longitude: f64, zone: u8) -> (f64, f64, f64) {
+pub fn radians_to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f64, f64) {
     let ellipsoid = WGS84;
     let long_origin = zone as f64 * 6.0 - 183.0;
     let e2 = 2.0 * ellipsoid.f - ellipsoid.f * ellipsoid.f;
