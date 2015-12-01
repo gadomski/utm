@@ -5,14 +5,15 @@ set -o errexit -o nounset
 project="utm"
 rev=$(git rev-parse --short HEAD)
 
-cargo doc --features "rxp-source sdf-source"
+cargo doc
 cd target/doc
 echo "<meta http-equiv=refresh content=0;url=${project}/index.html>" > index.html
 
-rm -rf .git
 git init
+git config user.name "Pete Gadomski"
+git config user.email "pete.gadomski@gmail.com"
 
-git remote add upstream "git@github.com:gadomski/utm"
+git remote add upstream "https://$GH_TOKEN@github.com/gadomski/utm"
 git fetch upstream
 git reset upstream/gh-pages
 
