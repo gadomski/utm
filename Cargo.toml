@@ -2,3 +2,9 @@
 name = "utm"
 version = "0.1.0"
 authors = ["Pete Gadomski <pete.gadomski@gmail.com>"]
+description = "Convert latitudes and longitudes to UTM coordinates"
+license = "MIT"
+homepage = "https://github.com/gadomski/utm"
+repository = "https://github.com/gadomski/utm"
+documentation = "http://gadomski.github.io/utm"
+keywords = ["utm", "gis"]
