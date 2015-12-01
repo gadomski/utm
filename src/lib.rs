@@ -12,38 +12,33 @@ const WGS84: Ellipsoid = Ellipsoid {
     f: 1.0 / 298.257222101,
 };
 
-/// Degrees.
-pub struct Degrees(pub f64);
-
-impl Degrees {
-    /// Converts degreees to radians.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use utm::Degrees;
-    /// let radians = Degrees(180.0).as_radians();
-    /// ```
-    pub fn as_radians(&self) -> Radians {
-        Radians(self.0 * PI / 180.0)
-    }
-}
-
-/// Radians.
-pub struct Radians(pub f64);
-
-/// Convert a latitude and longitude to UTM coordinates using the WGS84 ellipsoid.
+/// Converts a latitude and longitude in decimal degrees to UTM coordinates using the WGS84 ellipsoid.
 ///
 /// # Examples
 ///
 /// ```
-/// use utm::{to_utm_wgs84, Degrees};
-/// let (northing, easting, meridian_convergence) = to_utm_wgs84(Degrees(40.62), Degrees(-123.45), 10);
+/// use utm::to_utm_wgs84;
+/// let (northing, easting, meridian_convergence) = to_utm_wgs84(40.62, -123.45, 10);
 /// ```
-pub fn to_utm_wgs84(latitude: Degrees, longitude: Degrees, zone: u8) -> (f64, f64, f64) {
+pub fn to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f64, f64) {
+    let latitude = latitude * PI / 180.0;
+    let longitude = longitude * PI / 180.0;
+    radians_to_utm_wgs64(latitude, longitude, zone) 
+}
+
+/// Converts a latitude and longitude in radians to UTM coordinates using the WGS84 ellipsoid.
+///
+/// # Examples
+///
+/// ```
+/// use std::f64::consts::PI;
+/// use utm::to_utm_wgs84;
+/// let latitude = 40.62 * PI / 180.0;
+/// let longitude = -123.45 * PI / 180.0;
+/// let (northing, easting, meridian_convergence) = to_utm_wgs84(latitude, longitude, 10);
+/// ```
+pub fn radians_to_utm_wgs64(latitude: f64, longitude: f64, zone: u8) -> (f64, f64, f64) {
     let ellipsoid = WGS84;
-    let latitude = latitude.as_radians().0;
-    let longitude = longitude.as_radians().0;
     let long_origin = zone as f64 * 6.0 - 183.0;
     let e2 = 2.0 * ellipsoid.f - ellipsoid.f * ellipsoid.f;
     let ep2 = e2 / (1.0 - e2);
@@ -116,8 +111,8 @@ mod tests {
 
     #[test]
     fn reference() {
-        let latitude = Degrees(60.9679875497);
-        let longitude = Degrees(-149.119325194);
+        let latitude = 60.9679875497;
+        let longitude = -149.119325194;
         let (northing, easting, meridan_convgergence) = to_utm_wgs84(latitude, longitude, 6);
         assert!((385273.02 - easting).abs() < 1e-2);
         assert!((6761077.20 - northing).abs() < 1e-2);
