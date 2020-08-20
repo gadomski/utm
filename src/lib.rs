@@ -1,6 +1,14 @@
 //! Micro-library for converting from geodetic to UTM coordinates.
+#![cfg_attr(feature = "no_std", no_std)]
+
+#[cfg(feature = "no_std")]
+extern crate core as std;
 
 use std::f64::consts::PI;
+
+#[cfg(feature = "no_std")]
+extern crate num;
+
 
 pub struct Ellipsoid {
     a: f64,
@@ -23,7 +31,7 @@ const WGS84: Ellipsoid = Ellipsoid {
 pub fn to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f64, f64) {
     let latitude = latitude * PI / 180.0;
     let longitude = longitude * PI / 180.0;
-    radians_to_utm_wgs84(latitude, longitude, zone) 
+    radians_to_utm_wgs84(latitude, longitude, zone)
 }
 
 /// Converts a latitude and longitude in radians to UTM coordinates using the WGS84 ellipsoid.
@@ -53,9 +61,9 @@ pub fn radians_to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f6
     let term3 = (15.0 * e2 * e2) / 256.0 + (45.0 * e2 * e2 * e2) / 1024.0;
     let term4 = (35.0 * e2 * e2 * e2) / 3072.0;
 
-    let m = ellipsoid.a *
-            (term1 * latitude - term2 * (2.0 * latitude).sin() + term3 * (4.0 * latitude).sin() -
-             term4 * (6.0 * latitude).sin());
+    let m = ellipsoid.a
+        * (term1 * latitude - term2 * (2.0 * latitude).sin() + term3 * (4.0 * latitude).sin()
+            - term4 * (6.0 * latitude).sin());
 
     let x1 = ((1.0 - t + c) * a * a * a) / 6.0;
     let x2 = ((5.0 - 18.0 * t + t * t + 72.0 * c - 58.0 * ep2) * a * a * a * a * a) / 120.0;
@@ -76,7 +84,8 @@ pub fn radians_to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f6
 fn meridian_convergence(northing: f64, easting: f64, ellipsoid: Ellipsoid) -> f64 {
     let e2: f64 = 2.0 * ellipsoid.f - ellipsoid.f * ellipsoid.f;
     let e1 = (1.0 - (1.0 - e2).sqrt()) / (1.0 + (1.0 - e2).sqrt());
-    let mu_const = ellipsoid.a * (1.0 - e2 / 4.0 - 3.0 * e2 * e2 / 64.0 - 5.0 * e2 * e2 * e2 / 256.0);
+    let mu_const =
+        ellipsoid.a * (1.0 - e2 / 4.0 - 3.0 * e2 * e2 / 64.0 - 5.0 * e2 * e2 * e2 / 256.0);
 
     let np = northing / 0.9996;
     let mu = np / mu_const;
@@ -101,8 +110,10 @@ fn footprint_latitude(e1: f64, mu: f64) -> f64 {
     let term3 = 151.0 * e1 * e1 * e1 / 96.0;
     let term4 = 1097.0 * e1 * e1 * e1 * e1 / 512.0;
 
-    mu + term1 * (2.0 * mu).sin() + term2 * (4.0 * mu).sin() + term3 * (6.0 * mu).sin() +
-    term4 * (8.0 * mu).sin()
+    mu + term1 * (2.0 * mu).sin()
+        + term2 * (4.0 * mu).sin()
+        + term3 * (6.0 * mu).sin()
+        + term4 * (8.0 * mu).sin()
 }
 
 #[cfg(test)]
