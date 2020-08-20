@@ -7,4 +7,10 @@ license = "MIT"
 homepage = "https://github.com/gadomski/utm"
 repository = "https://github.com/gadomski/utm"
 documentation = "http://gadomski.github.io/utm"
-keywords = ["utm", "gis"]
+keywords = ["utm", "gis", "no_std"]
+
+[dependencies]
+num = {version = "0.3.0", optional = true}
+
+[features]
+no_std = ["num"]
