@@ -9,7 +9,6 @@ use std::f64::consts::PI;
 #[cfg(feature = "no_std")]
 extern crate num;
 
-
 pub struct Ellipsoid {
     a: f64,
     f: f64,
