@@ -9,6 +9,11 @@ use std::f64::consts::PI;
 #[cfg(feature = "no_std")]
 extern crate num;
 
+#[cfg(feature = "no_std")]
+#[allow(unused_imports)]
+// it's not clear why this generates an unused imports, b/c tests fail w/o it
+use num::traits::float::Float;
+
 pub struct Ellipsoid {
     a: f64,
     f: f64,

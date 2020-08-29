@@ -10,7 +10,7 @@ documentation = "http://gadomski.github.io/utm"
 keywords = ["utm", "gis", "no_std"]
 
 [dependencies]
-num = {version = "0.3.0", optional = true, default-features = false}
+num = {version = "0.3.0", optional = true, default-features = false, features = ["libm"]}
 
 [features]
 no_std = ["num"]
