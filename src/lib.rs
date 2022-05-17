@@ -24,6 +24,8 @@ const WGS84: Ellipsoid = Ellipsoid {
     f: 1.0 / 298.257222101,
 };
 
+const ZONE_LETTERS: &str = "CDEFGHJKLMNPQRSTUVWXX";
+
 /// Converts a latitude and longitude in decimal degrees to UTM coordinates using the WGS84 ellipsoid.
 ///
 /// # Examples
@@ -120,17 +122,213 @@ fn footprint_latitude(e1: f64, mu: f64) -> f64 {
         + term4 * (8.0 * mu).sin()
 }
 
+const K0: f64 = 0.9996;
+const E: f64 = 0.00669438;
+
+/// Converts a UTM coordinate to a latitude and longitude.
+/// zone_num can be obtain by calling lat_lon_to_zone_number
+/// zone_letter can be obtain by calling lat_to_zone_letter
+///
+/// # Example
+///
+/// ```
+/// use utm::wsg84_utm_to_lat_lon;
+/// const DELTA: f64 = 3e-5;
+/// fn is_close(a: f64, b: f64, epsilon: f64) -> bool {
+///        (a - b).abs() < epsilon
+/// }
+/// // Capetown, South Africa,
+/// let easting = 261878_f64;
+/// let northing = 6243186_f64;
+/// let zone_num = 34_u8;
+/// let zone_letter = 'H';
+/// let (lat, long) = wsg84_utm_to_lat_lon(easting, northing, zone_num, zone_letter);
+/// assert_eq!(is_close(lat, -33.92487, DELTA), true);
+/// assert_eq!(is_close(long, 18.42406, DELTA), true);
+/// ```
+pub fn wsg84_utm_to_lat_lon(
+    easting: f64,
+    northing: f64,
+    zone_num: u8,
+    zone_letter: char,
+) -> (f64, f64) {
+    if easting < 100000. || 1000000. <= easting {
+        panic!("Easting must be between 100000 and 999999");
+    }
+    if northing < 0. || northing > 10000000. {
+        panic!("Northing must be between 0 and 10000000");
+    }
+    if zone_num < 1 || zone_num > 60 {
+        panic!("Zone number must be between 1 and 60");
+    }
+    if zone_letter < 'C' || zone_letter > 'X' {
+        panic!("Zone letter must be between C and X");
+    }
+
+    let ellipsoid = WGS84;
+
+    let e2 = E.powi(2);
+    let e3 = E.powi(3);
+    let e_p2: f64 = E / (1. - E);
+
+    let sqrt_e: f64 = (1. - E).sqrt();
+    let _e: f64 = (1. - sqrt_e) / (1. + sqrt_e);
+    let _e2: f64 = _e.powi(2);
+    let _e3: f64 = _e.powi(3);
+    let _e4: f64 = _e.powi(4);
+    let _e5: f64 = _e.powi(5);
+
+    let m1 = 1. - E / 4. - 3. * e2 / 64. - 5. * e3 / 256.;
+
+    let p2: f64 = 3. / 2. * _e - 27. / 32. * _e3 + 269. / 512. * _e5;
+    let p3: f64 = 21. / 16. * _e2 - 55. / 32. * _e4;
+    let p4: f64 = 151. / 96. * _e3 - 417. / 128. * _e5;
+    let p5: f64 = 1097. / 512. * _e4;
+
+    let x = easting - 500000_f64;
+    let mut y = northing;
+
+    let northern = zone_letter >= 'N';
+
+    if !northern {
+        y -= 1e7;
+    }
+
+    let m = y / K0;
+    let mu = m / (ellipsoid.a * m1);
+
+    let p_rad = mu
+        + p2 * (2. * mu).sin()
+        + p3 * (4. * mu).sin()
+        + p4 * (6. * mu).sin()
+        + p5 * (8. * mu).sin();
+
+    let p_sin = p_rad.sin();
+    let p_sin2 = p_sin.powi(2);
+
+    let p_cos = p_rad.cos();
+
+    let p_tan = p_rad.tan();
+    let p_tan2 = p_tan.powi(2);
+    let p_tan4 = p_tan.powi(4);
+
+    let ep_sin = 1. - E * p_sin2;
+    let ep_sin_sqrt = ep_sin.sqrt();
+
+    let n = ellipsoid.a / ep_sin_sqrt;
+    let r = (1. - E) / ep_sin;
+
+    let c = _e * p_cos * p_cos;
+    let c2 = c * c;
+
+    let d = x / (n * K0);
+    let d2 = d.powi(2);
+    let d3 = d.powi(3);
+    let d4 = d.powi(4);
+    let d5 = d.powi(5);
+    let d6 = d.powi(6);
+
+    let latitude = p_rad
+        - (p_tan / r) * (d2 / 2. - d4 / 24. * (5. + 3. * p_tan2 + 10. * c - 4. * c2 - 9. * e_p2))
+        + d6 / 720. * (61. + 90. * p_tan2 + 298. * c + 45. * p_tan4 - 252. * e_p2 - 3. * c2);
+
+    let longitude = (d - d3 / 6. * (1. + 2. * p_tan2 + c)
+        + d5 / 120. * (5. - 2. * c + 28. * p_tan2 - 3. * c2 + 8. * e_p2 + 24. * p_tan4))
+        / p_cos;
+
+    return (
+        latitude / PI * 180.,
+        longitude / PI * 180. + (f64::from(zone_num) - 1.) * 6. - 180. + 3.,
+    );
+}
+
+/// Convert a latitude to the UTM zone letter.
+///
+/// # Example
+///
+/// ```
+/// use utm::lat_to_zone_letter;
+/// assert_eq!(lat_to_zone_letter(-33.92487), Some('H'));
+/// assert_eq!(lat_to_zone_letter(0.), Some('N'));
+/// assert_eq!(lat_to_zone_letter(50.77535), Some('U'));
+/// ```
+pub fn lat_to_zone_letter(latitude: f64) -> Option<char> {
+    if -80. <= latitude && latitude <= 84. {
+        let (_, c) = ZONE_LETTERS
+            .char_indices()
+            .nth(((latitude + 80.) / 8.).floor() as usize)
+            .unwrap();
+        return Some(c);
+    }
+    return None;
+}
+
+/// Convert a latitude and longitude to the UTM zone number.
+///
+/// # Example
+///
+/// ```
+/// use utm::lat_lon_to_zone_number;
+/// assert_eq!(lat_lon_to_zone_number(-33.92487, 18.42406), 34);
+/// assert_eq!(lat_lon_to_zone_number(0., 0.), 31);
+/// assert_eq!(lat_lon_to_zone_number(50.77535, 6.08389), 32);
+/// ```
+pub fn lat_lon_to_zone_number(latitude: f64, longitude: f64) -> u8 {
+    if 56. <= latitude && latitude < 64. && 3. <= longitude && longitude < 12. {
+        return 32;
+    }
+
+    if 72. <= latitude && latitude <= 84. && longitude >= 0. {
+        if longitude < 9. {
+            return 31;
+        }
+        if longitude < 21. {
+            return 33;
+        }
+        if longitude < 33. {
+            return 35;
+        }
+        if longitude < 42. {
+            return 37;
+        }
+    }
+
+    return (((longitude + 180.) / 6.).floor() + 1.) as u8;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const DELTA: f64 = 3e-5;
 
     #[test]
     fn reference() {
         let latitude = 60.9679875497;
         let longitude = -149.119325194;
-        let (northing, easting, meridan_convgergence) = to_utm_wgs84(latitude, longitude, 6);
+        let (northing, easting, meridian_convergence) = to_utm_wgs84(latitude, longitude, 6);
         assert!((385273.02 - easting).abs() < 1e-2);
         assert!((6761077.20 - northing).abs() < 1e-2);
-        assert!((0.0323 - meridan_convgergence).abs() < 1e-4);
+        assert!((0.0323 - meridian_convergence).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_to_lat_lon() {
+        let easting = 313784.;
+        let northing = 5427057.;
+        let zone_num = 60;
+        let zone_letter = 'G';
+
+        let (expected_lat, expected_lon) = (-41.28646, 174.77624);
+
+        let (latitude, longitude) = wsg84_utm_to_lat_lon(easting, northing, zone_num, zone_letter);
+        println!("{}, {}", latitude, longitude);
+        println!("{}, {}", expected_lat, expected_lon);
+        assert_eq!(is_close(latitude, expected_lat, DELTA), true);
+        assert_eq!(is_close(longitude, expected_lon, DELTA), true);
+    }
+
+    fn is_close(a: f64, b: f64, epsilon: f64) -> bool {
+        (a - b).abs() < epsilon
     }
 }
