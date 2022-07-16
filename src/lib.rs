@@ -40,6 +40,11 @@ pub fn to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f64, f64) 
     radians_to_utm_wgs84(latitude, longitude, zone)
 }
 
+pub fn to_utm_wgs84_no_zone(latitude: f64, longitude: f64) -> (f64, f64, f64) {
+    let zone = lat_lon_to_zone_number(latitude, longitude);
+    to_utm_wgs84(latitude, longitude, zone)
+}
+
 /// Converts a latitude and longitude in radians to UTM coordinates using the WGS84 ellipsoid.
 ///
 /// # Examples
@@ -324,6 +329,18 @@ mod tests {
         let (latitude, longitude) = wsg84_utm_to_lat_lon(easting, northing, zone_num, zone_letter);
         assert_eq!(is_close(latitude, expected_lat, DELTA), true);
         assert_eq!(is_close(longitude, expected_lon, DELTA), true);
+    }
+
+    #[test]
+    fn test_to_wsg84_no_zone(){
+        let latitude = 60.9679875497;
+        let longitude = -149.119325194;
+        let (northing, easting, meridian_convergence) = to_utm_wgs84(latitude, longitude, 6);
+
+        let (northing_2, easting_2, meridian_convergence_2) = to_utm_wgs84_no_zone(latitude, longitude);
+        assert_eq!(northing, northing_2);
+        assert_eq!(easting, easting_2);
+        assert_eq!(meridian_convergence, meridian_convergence_2);
     }
 
     fn is_close(a: f64, b: f64, epsilon: f64) -> bool {
