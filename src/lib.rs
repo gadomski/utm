@@ -24,7 +24,7 @@ const WGS84: Ellipsoid = Ellipsoid {
     f: 1.0 / 298.257222101,
 };
 
-const ZONE_LETTERS: &str = "CDEFGHJKLMNPQRSTUVWXX";
+const ZONE_LETTERS: &'static str = "CDEFGHJKLMNPQRSTUVWXX";
 
 /// Converts a latitude and longitude in decimal degrees to UTM coordinates using the WGS84 ellipsoid.
 ///
@@ -322,8 +322,6 @@ mod tests {
         let (expected_lat, expected_lon) = (-41.28646, 174.77624);
 
         let (latitude, longitude) = wsg84_utm_to_lat_lon(easting, northing, zone_num, zone_letter);
-        println!("{}, {}", latitude, longitude);
-        println!("{}, {}", expected_lat, expected_lon);
         assert_eq!(is_close(latitude, expected_lat, DELTA), true);
         assert_eq!(is_close(longitude, expected_lon, DELTA), true);
     }
