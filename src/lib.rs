@@ -41,8 +41,7 @@ pub fn to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f64, f64) 
 }
 
 pub fn to_utm_wgs84_no_zone(latitude: f64, longitude: f64) -> (f64, f64, f64) {
-    let zone = lat_lon_to_zone_number(latitude, longitude);
-    to_utm_wgs84(latitude, longitude, zone)
+    to_utm_wgs84(latitude, longitude, lat_lon_to_zone_number(latitude, longitude))
 }
 
 /// Converts a latitude and longitude in radians to UTM coordinates using the WGS84 ellipsoid.
