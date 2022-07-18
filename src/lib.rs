@@ -14,6 +14,9 @@ extern crate num;
 // it's not clear why this generates an unused imports, b/c tests fail w/o it
 use num::traits::float::Float;
 
+extern crate thiserror;
+use thiserror::Error;
+
 pub struct Ellipsoid {
     a: f64,
     f: f64,
@@ -129,6 +132,20 @@ fn footprint_latitude(e1: f64, mu: f64) -> f64 {
 const K0: f64 = 0.9996;
 const E: f64 = 0.00669438;
 
+
+#[derive(Error, Debug)]
+pub enum WSG84ToLatLonError {
+    #[error("Easting out of range, must be between 100000 and 999999")]
+    EastingOutOfRange,
+    #[error("Northing out of range, must be between 0 and 10000000")]
+    NorthingOutOfRange,
+    #[error("Zone num out of range, must be between 1 and 60")]
+    ZoneNumOutOfRange,
+    #[error("Zone letter out of range, must be between C and X")]
+    ZoneLetterOutOfRange,
+}
+
+
 /// Converts a UTM coordinate to a latitude and longitude.
 /// zone_num can be obtain by calling lat_lon_to_zone_number
 /// zone_letter can be obtain by calling lat_to_zone_letter
@@ -146,7 +163,7 @@ const E: f64 = 0.00669438;
 /// let northing = 6243186_f64;
 /// let zone_num = 34_u8;
 /// let zone_letter = 'H';
-/// let (lat, long) = wsg84_utm_to_lat_lon(easting, northing, zone_num, zone_letter);
+/// let (lat, long) = wsg84_utm_to_lat_lon(easting, northing, zone_num, zone_letter).unwrap();
 /// assert_eq!(is_close(lat, -33.92487, DELTA), true);
 /// assert_eq!(is_close(long, 18.42406, DELTA), true);
 /// ```
@@ -155,18 +172,18 @@ pub fn wsg84_utm_to_lat_lon(
     northing: f64,
     zone_num: u8,
     zone_letter: char,
-) -> (f64, f64) {
+) -> Result<(f64, f64), WSG84ToLatLonError> {
     if easting < 100000. || 1000000. <= easting {
-        panic!("Easting must be between 100000 and 999999");
+        return Err(WSG84ToLatLonError::EastingOutOfRange);
     }
     if northing < 0. || northing > 10000000. {
-        panic!("Northing must be between 0 and 10000000");
+        return Err(WSG84ToLatLonError::NorthingOutOfRange);
     }
     if zone_num < 1 || zone_num > 60 {
-        panic!("Zone number must be between 1 and 60");
+        return Err(WSG84ToLatLonError::ZoneNumOutOfRange);
     }
     if zone_letter < 'C' || zone_letter > 'X' {
-        panic!("Zone letter must be between C and X");
+        return Err(WSG84ToLatLonError::ZoneLetterOutOfRange);
     }
 
     let ellipsoid = WGS84;
@@ -240,10 +257,11 @@ pub fn wsg84_utm_to_lat_lon(
         + d5 / 120. * (5. - 2. * c + 28. * p_tan2 - 3. * c2 + 8. * e_p2 + 24. * p_tan4))
         / p_cos;
 
-    return (
+
+    Ok((
         latitude / PI * 180.,
         longitude / PI * 180. + (f64::from(zone_num) - 1.) * 6. - 180. + 3.,
-    );
+    ))
 }
 
 /// Convert a latitude to the UTM zone letter.
@@ -318,14 +336,38 @@ mod tests {
 
     #[test]
     fn test_to_lat_lon() {
+        let (expected_lat, expected_lon) = (-41.28646, 174.77624);
+
+        let wrong_easting = 50.;
+        let wrong_northing = -1.;
+        let wrong_zone_num = 61;
+        let wrong_zone_letter = 'y';
+
         let easting = 313784.;
         let northing = 5427057.;
         let zone_num = 60;
         let zone_letter = 'G';
 
-        let (expected_lat, expected_lon) = (-41.28646, 174.77624);
+        let mut result = wsg84_utm_to_lat_lon(wrong_easting, northing, zone_num, zone_letter);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), WSG84ToLatLonError::EastingOutOfRange.to_string());
 
-        let (latitude, longitude) = wsg84_utm_to_lat_lon(easting, northing, zone_num, zone_letter);
+        result = wsg84_utm_to_lat_lon(easting, wrong_northing, zone_num, zone_letter);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), WSG84ToLatLonError::NorthingOutOfRange.to_string());
+
+        result = wsg84_utm_to_lat_lon(easting, northing, wrong_zone_num, zone_letter);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), WSG84ToLatLonError::ZoneNumOutOfRange.to_string());
+
+        result = wsg84_utm_to_lat_lon(easting, northing, zone_num, wrong_zone_letter);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), WSG84ToLatLonError::ZoneLetterOutOfRange.to_string());
+
+
+        result= wsg84_utm_to_lat_lon(easting, northing, zone_num, zone_letter);
+        assert!(result.is_ok());
+        let (latitude, longitude) = result.unwrap();
         assert_eq!(is_close(latitude, expected_lat, DELTA), true);
         assert_eq!(is_close(longitude, expected_lon, DELTA), true);
     }
