@@ -40,6 +40,14 @@ pub fn to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f64, f64) 
     radians_to_utm_wgs84(latitude, longitude, zone)
 }
 
+/// Converts a latitude and longitude in decimal degrees (using the latitude and longitude to compute the zone) to UTM coordinates using the WGS84 ellipsoid.
+///
+/// # Examples
+///
+/// ```
+/// use utm::to_utm_wgs84_no_zone;
+/// let (northing, easting, meridian_convergence) = to_utm_wgs84_no_zone(40.62, -123.45);
+/// ```
 pub fn to_utm_wgs84_no_zone(latitude: f64, longitude: f64) -> (f64, f64, f64) {
     to_utm_wgs84(
         latitude,
@@ -154,6 +162,7 @@ impl std::error::Error for WSG84ToLatLonError {
 }
 
 #[derive(Debug, PartialEq)]
+/// Error type for the wsg84_utm_to_lat_lon function.
 pub enum WSG84ToLatLonError {
     EastingOutOfRange,
     NorthingOutOfRange,
@@ -165,7 +174,7 @@ pub enum WSG84ToLatLonError {
 /// zone_num can be obtain by calling lat_lon_to_zone_number
 /// zone_letter can be obtain by calling lat_to_zone_letter
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// use utm::wsg84_utm_to_lat_lon;
@@ -280,7 +289,7 @@ pub fn wsg84_utm_to_lat_lon(
 
 /// Convert a latitude to the UTM zone letter.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// use utm::lat_to_zone_letter;
@@ -301,7 +310,7 @@ pub fn lat_to_zone_letter(latitude: f64) -> Option<char> {
 
 /// Convert a latitude and longitude to the UTM zone number.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// use utm::lat_lon_to_zone_number;
