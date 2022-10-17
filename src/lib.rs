@@ -96,7 +96,10 @@ pub fn radians_to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f6
     let y3 = (a * a) / 2.0 + y1 + y2;
     let y = 0.9996 * (m + n * latitude.tan() * y3);
 
-    let northing = y;
+    // Southern hemisphere coords add a factor
+    let northing_mod = if latitude > 0.0 { 0.0 } else { 10000000.0 };
+
+    let northing = y + northing_mod;
     let easting = x + 500000.0;
 
     let meridian_convergence = meridian_convergence(northing, easting, WGS84);
@@ -355,6 +358,17 @@ mod tests {
         assert!((385273.02 - easting).abs() < 1e-2);
         assert!((6761077.20 - northing).abs() < 1e-2);
         assert!((0.0323 - meridian_convergence).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_southern_hemisphere() {
+        let latitude = -23.809749;
+        let longitude = 148.334111;
+        let (northing, easting, meridian_convergence) = to_utm_wgs84(latitude, longitude, 55);
+        dbg!(northing, easting, meridian_convergence);
+        assert!((635900.94 - easting).abs() < 1e-2);
+        assert!((7366197.82 - northing).abs() < 1e-2);
+        assert!((-0.0486 - meridian_convergence).abs() < 1e-4);
     }
 
     #[test]
