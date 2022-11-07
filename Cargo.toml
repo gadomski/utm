@@ -1,6 +1,6 @@
 [package]
 name = "utm"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Pete Gadomski <pete.gadomski@gmail.com>"]
 description = "Convert latitudes and longitudes to UTM coordinates and vice versa"
 license = "MIT"
