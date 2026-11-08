@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The ellipsoid is WGS 84 (the flattening was GRS 80's), and the meridian arc series has the e^8 terms (#6)
+- `wsg84_utm_to_lat_lon` used the third flattening where the series needs the second eccentricity squared, an error of up to 0.8 m at the edge of a zone
+- The equator is in the northern hemisphere, as for `lat_to_zone_letter`
+- The date line: zone 60 and zone 1 in both directions, and `lat_lon_to_zone_number` returns 1 to 60 for any longitude
+- The meridian convergence in the southern hemisphere
+- The tests compile with the `no_std` feature
+
 ## [0.1.5]
 
 ### Added
