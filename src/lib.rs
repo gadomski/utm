@@ -21,7 +21,7 @@ pub struct Ellipsoid {
 
 const WGS84: Ellipsoid = Ellipsoid {
     a: 6378137.0,
-    f: 1.0 / 298.257222101,
+    f: 1.0 / 298.257223563,
 };
 
 const ZONE_LETTERS: &'static str = "CDEFGHJKLMNPQRSTUVWXX";
@@ -78,14 +78,22 @@ pub fn radians_to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f6
     let c = ep2 * latitude.cos() * latitude.cos();
     let a = latitude.cos() * (longitude - (long_origin * PI / 180.0));
 
-    let term1 = 1.0 - e2 / 4.0 - (3.0 * e2 * e2) / 64.0 - (5.0 * e2 * e2 * e2) / 256.0;
-    let term2 = (3.0 * e2) / 8.0 + (3.0 * e2 * e2) / 32.0 + (45.0 * e2 * e2 * e2) / 1024.0;
-    let term3 = (15.0 * e2 * e2) / 256.0 + (45.0 * e2 * e2 * e2) / 1024.0;
-    let term4 = (35.0 * e2 * e2 * e2) / 3072.0;
+    // meridian arc, series in e^2 up to the e^8 terms
+    let e4 = e2 * e2;
+    let term1 =
+        1.0 - e2 / 4.0 - (3.0 * e4) / 64.0 - (5.0 * e4 * e2) / 256.0 - (175.0 * e4 * e4) / 16384.0;
+    let term2 = (3.0 * e2) / 8.0
+        + (3.0 * e4) / 32.0
+        + (45.0 * e4 * e2) / 1024.0
+        + (105.0 * e4 * e4) / 4096.0;
+    let term3 = (15.0 * e4) / 256.0 + (45.0 * e4 * e2) / 1024.0 + (525.0 * e4 * e4) / 16384.0;
+    let term4 = (35.0 * e4 * e2) / 3072.0 + (175.0 * e4 * e4) / 12288.0;
+    let term5 = (315.0 * e4 * e4) / 131072.0;
 
     let m = ellipsoid.a
         * (term1 * latitude - term2 * (2.0 * latitude).sin() + term3 * (4.0 * latitude).sin()
-            - term4 * (6.0 * latitude).sin());
+            - term4 * (6.0 * latitude).sin()
+            + term5 * (8.0 * latitude).sin());
 
     let x1 = ((1.0 - t + c) * a * a * a) / 6.0;
     let x2 = ((5.0 - 18.0 * t + t * t + 72.0 * c - 58.0 * ep2) * a * a * a * a * a) / 120.0;
@@ -142,7 +150,6 @@ fn footprint_latitude(e1: f64, mu: f64) -> f64 {
 }
 
 const K0: f64 = 0.9996;
-const E: f64 = 0.00669438;
 
 #[cfg(feature = "std")]
 impl std::error::Error for WSG84ToLatLonError {
@@ -215,18 +222,20 @@ pub fn wsg84_utm_to_lat_lon(
 
     let ellipsoid = WGS84;
 
-    let e2 = E.powi(2);
-    let e3 = E.powi(3);
-    let e_p2: f64 = E / (1. - E);
+    // first eccentricity squared, as in the forward conversion
+    let e_sq = 2.0 * ellipsoid.f - ellipsoid.f * ellipsoid.f;
+    let e2 = e_sq.powi(2);
+    let e3 = e_sq.powi(3);
+    let e_p2: f64 = e_sq / (1. - e_sq);
 
-    let sqrt_e: f64 = (1. - E).sqrt();
+    let sqrt_e: f64 = (1. - e_sq).sqrt();
     let _e: f64 = (1. - sqrt_e) / (1. + sqrt_e);
     let _e2: f64 = _e.powi(2);
     let _e3: f64 = _e.powi(3);
     let _e4: f64 = _e.powi(4);
     let _e5: f64 = _e.powi(5);
 
-    let m1 = 1. - E / 4. - 3. * e2 / 64. - 5. * e3 / 256.;
+    let m1 = 1. - e_sq / 4. - 3. * e2 / 64. - 5. * e3 / 256. - 175. * e2 * e2 / 16384.;
 
     let p2: f64 = 3. / 2. * _e - 27. / 32. * _e3 + 269. / 512. * _e5;
     let p3: f64 = 21. / 16. * _e2 - 55. / 32. * _e4;
@@ -260,11 +269,11 @@ pub fn wsg84_utm_to_lat_lon(
     let p_tan2 = p_tan.powi(2);
     let p_tan4 = p_tan.powi(4);
 
-    let ep_sin = 1. - E * p_sin2;
+    let ep_sin = 1. - e_sq * p_sin2;
     let ep_sin_sqrt = ep_sin.sqrt();
 
     let n = ellipsoid.a / ep_sin_sqrt;
-    let r = (1. - E) / ep_sin;
+    let r = (1. - e_sq) / ep_sin;
 
     let c = _e * p_cos * p_cos;
     let c2 = c * c;
@@ -422,6 +431,38 @@ mod tests {
         assert_eq!(northing, northing_2);
         assert_eq!(easting, easting_2);
         assert_eq!(meridian_convergence, meridian_convergence_2);
+    }
+
+    // Reference values of the tests below come from PROJ 9.8.1:
+    //   echo "<lon> <lat>" | cs2cs -f "%.6f" +proj=longlat +datum=WGS84 +to +proj=utm +zone=<zone> [+south] +datum=WGS84
+
+    #[test]
+    fn wgs84_ellipsoid() {
+        // the defining parameters of WGS 84: a = 6378137 m, 1/f = 298.257223563 (not GRS 80's 298.257222101)
+        assert_eq!(WGS84.a, 6378137.0);
+        assert_eq!(WGS84.f, 1.0 / 298.257223563);
+    }
+
+    #[test]
+    fn central_meridian_matches_proj() {
+        // on the central meridian only the meridian arc counts, so this tests the ellipsoid and the arc series
+        let reference = [
+            (70.0, 7765873.135479, 35),
+            (45.0, 4982950.400227, 35),
+            (0.5, 55265.037143, 35),
+            (-70.0, 2234126.864521, 35),
+        ];
+        for (latitude, northing, zone) in reference {
+            let (n, e, _) = to_utm_wgs84(latitude, 27.0, zone);
+            assert!((e - 500000.0).abs() < 1e-6, "easting {} at {}", e, latitude);
+            assert!(
+                (n - northing).abs() < 2e-4,
+                "northing {} vs {} at {}",
+                n,
+                northing,
+                latitude
+            );
+        }
     }
 
     fn is_close(a: f64, b: f64, epsilon: f64) -> bool {
