@@ -114,7 +114,9 @@ pub fn radians_to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f6
     let northing = y + northing_mod;
     let easting = x + 500000.0;
 
-    let meridian_convergence = meridian_convergence(northing, easting, WGS84);
+    // the convergence is computed from the northing measured from the equator, without the
+    // false northing of the southern hemisphere
+    let meridian_convergence = meridian_convergence(y, easting, WGS84);
     (northing, easting, meridian_convergence)
 }
 
@@ -386,10 +388,10 @@ mod tests {
         let latitude = -23.809749;
         let longitude = 148.334111;
         let (northing, easting, meridian_convergence) = to_utm_wgs84(latitude, longitude, 55);
-        dbg!(northing, easting, meridian_convergence);
         assert!((635900.94 - easting).abs() < 1e-2);
         assert!((7366197.82 - northing).abs() < 1e-2);
-        assert!((-0.0486 - meridian_convergence).abs() < 1e-4);
+        // PROJ: convergence -0.53866478 degrees, which is +0.00940 here (the sign convention is the opposite of PROJ's)
+        assert!((0.0094 - meridian_convergence).abs() < 1e-4);
     }
 
     #[test]
@@ -584,6 +586,29 @@ mod tests {
         assert_eq!(lat_lon_to_zone_number(10., 179.999), 60);
         assert_eq!(lat_lon_to_zone_number(10., 190.), 2);
         assert_eq!(lat_lon_to_zone_number(10., -190.), 59); // -190 is 170 E
+    }
+
+    #[test]
+    fn meridian_convergence_matches_proj() {
+        // `proj -V +proj=utm +zone=<zone> [+south] +datum=WGS84` prints the convergence in degrees; this
+        // function returns radians, with the opposite sign (positive west of the central meridian in the northern hemisphere)
+        let reference = [
+            (60.0, 30.0, 35, 2.59867269),
+            (60.9679875497, -149.119325194, 6, -1.85322919),
+            (-23.809749, 148.334111, 55, -0.53866478),
+            (-60.0, 24.5, 35, 2.16540871),
+        ];
+        for (latitude, longitude, zone, proj_degrees) in reference {
+            let (_, _, convergence) = to_utm_wgs84(latitude, longitude, zone);
+            let expected = -f64::to_radians(proj_degrees);
+            assert!(
+                (convergence - expected).abs() < 1e-6,
+                "{} vs {} at {}",
+                convergence,
+                expected,
+                latitude
+            );
+        }
     }
 
     fn is_close(a: f64, b: f64, epsilon: f64) -> bool {
