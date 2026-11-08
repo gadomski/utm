@@ -104,8 +104,9 @@ pub fn radians_to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f6
     let y3 = (a * a) / 2.0 + y1 + y2;
     let y = 0.9996 * (m + n * latitude.tan() * y3);
 
-    // Southern hemisphere coords add a factor
-    let northing_mod = if latitude > 0.0 { 0.0 } else { 10000000.0 };
+    // Southern hemisphere coords add a factor. The equator is in the northern hemisphere, as for
+    // `lat_to_zone_letter`, which gives 'N' for a latitude of 0.
+    let northing_mod = if latitude >= 0.0 { 0.0 } else { 10000000.0 };
 
     let northing = y + northing_mod;
     let easting = x + 500000.0;
@@ -507,6 +508,27 @@ mod tests {
                 longitude
             );
         }
+    }
+
+    #[test]
+    fn equator_is_in_the_northern_hemisphere() {
+        // PROJ: 28 E, 0 N, zone 35 -> 611280.650891, 0
+        for latitude in [0.0, -0.0] {
+            let (northing, easting, _) = to_utm_wgs84(latitude, 28.0, 35);
+            assert!(northing.abs() < 1e-6, "northing {}", northing);
+            assert!(
+                (easting - 611280.650891).abs() < 1e-3,
+                "easting {}",
+                easting
+            );
+        }
+        // and the zone letter that goes with it takes the point back
+        let letter = lat_to_zone_letter(0.0).unwrap();
+        assert_eq!(letter, 'N');
+        let (northing, easting, _) = to_utm_wgs84(0.0, 28.0, 35);
+        let (latitude, longitude) = wsg84_utm_to_lat_lon(easting, northing, 35, letter).unwrap();
+        assert!(latitude.abs() < 1e-9, "latitude {}", latitude);
+        assert!((longitude - 28.0).abs() < 1e-9, "longitude {}", longitude);
     }
 
     fn is_close(a: f64, b: f64, epsilon: f64) -> bool {
