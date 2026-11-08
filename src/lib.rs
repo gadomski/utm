@@ -275,7 +275,7 @@ pub fn wsg84_utm_to_lat_lon(
     let n = ellipsoid.a / ep_sin_sqrt;
     let r = (1. - e_sq) / ep_sin;
 
-    let c = _e * p_cos * p_cos;
+    let c = e_p2 * p_cos * p_cos;
     let c2 = c * c;
 
     let d = x / (n * K0);
@@ -461,6 +461,50 @@ mod tests {
                 n,
                 northing,
                 latitude
+            );
+        }
+    }
+
+    #[test]
+    fn to_lat_lon_matches_proj_at_the_edge_of_the_zone() {
+        // 3 degrees from the central meridian of zone 35 (27 E): (lon, lat, easting, northing, zone letter)
+        let reference = [
+            (30.0, 60.0, 667294.821124, 6655205.483635, 'V'),
+            (24.0, 70.0, 385526.285254, 7768690.108775, 'W'),
+            (30.0, 45.0, 736446.026101, 4987329.504699, 'T'),
+            (24.0, -60.0, 332705.178876, 3344794.516365, 'E'),
+            (30.0, -30.0, 789409.653236, 6677424.095615, 'J'),
+        ];
+        for (lon, lat, easting, northing, letter) in reference {
+            assert_eq!(lat_to_zone_letter(lat), Some(letter));
+            let (la, lo) = wsg84_utm_to_lat_lon(easting, northing, 35, letter).unwrap();
+            // 2e-7 degrees is about 2 cm
+            assert!((la - lat).abs() < 2e-7, "latitude {} vs {}", la, lat);
+            assert!((lo - lon).abs() < 2e-7, "longitude {} vs {}", lo, lon);
+        }
+    }
+
+    #[test]
+    fn round_trip() {
+        // out and back again, in the southern hemisphere (the point of the test above) and in the northern
+        for (latitude, longitude, zone) in [
+            (-23.809749, 148.334111, 55),
+            (60.9679875497, -149.119325194, 6),
+        ] {
+            let (northing, easting, _) = to_utm_wgs84(latitude, longitude, zone);
+            let letter = lat_to_zone_letter(latitude).unwrap();
+            let (la, lo) = wsg84_utm_to_lat_lon(easting, northing, zone, letter).unwrap();
+            assert!(
+                (la - latitude).abs() < 2e-8,
+                "latitude {} vs {}",
+                la,
+                latitude
+            );
+            assert!(
+                (lo - longitude).abs() < 2e-8,
+                "longitude {} vs {}",
+                lo,
+                longitude
             );
         }
     }
