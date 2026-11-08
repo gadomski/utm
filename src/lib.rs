@@ -76,7 +76,10 @@ pub fn radians_to_utm_wgs84(latitude: f64, longitude: f64, zone: u8) -> (f64, f6
     let n = ellipsoid.a / (1.0 - e2 * latitude.sin() * latitude.sin()).sqrt();
     let t = latitude.tan() * latitude.tan();
     let c = ep2 * latitude.cos() * latitude.cos();
-    let a = latitude.cos() * (longitude - (long_origin * PI / 180.0));
+    // longitude from the central meridian, in [-PI, PI): zone 60 reaches over the date line
+    let dlon = longitude - (long_origin * PI / 180.0);
+    let dlon = dlon - 2.0 * PI * ((dlon + PI) / (2.0 * PI)).floor();
+    let a = latitude.cos() * dlon;
 
     // meridian arc, series in e^2 up to the e^8 terms
     let e4 = e2 * e2;
@@ -294,9 +297,11 @@ pub fn wsg84_utm_to_lat_lon(
         + d5 / 120. * (5. - 2. * c + 28. * p_tan2 - 3. * c2 + 8. * e_p2 + 24. * p_tan4))
         / p_cos;
 
+    let longitude = longitude / PI * 180. + (f64::from(zone_num) - 1.) * 6. - 180. + 3.;
     Ok((
         latitude / PI * 180.,
-        longitude / PI * 180. + (f64::from(zone_num) - 1.) * 6. - 180. + 3.,
+        // zone 60 reaches over the date line: report 181.5 as -178.5
+        longitude - 360. * ((longitude + 180.) / 360.).floor(),
     ))
 }
 
@@ -330,8 +335,14 @@ pub fn lat_to_zone_letter(latitude: f64) -> Option<char> {
 /// assert_eq!(lat_lon_to_zone_number(-33.92487, 18.42406), 34);
 /// assert_eq!(lat_lon_to_zone_number(0., 0.), 31);
 /// assert_eq!(lat_lon_to_zone_number(50.77535, 6.08389), 32);
+/// // the date line is where zone 60 ends and zone 1 begins
+/// assert_eq!(lat_lon_to_zone_number(0., 179.999), 60);
+/// assert_eq!(lat_lon_to_zone_number(0., 180.), 1);
 /// ```
 pub fn lat_lon_to_zone_number(latitude: f64, longitude: f64) -> u8 {
+    // 180 is the same meridian as -180, and 190 as -170: zone numbers are 1 to 60
+    let longitude = longitude - 360. * ((longitude + 180.) / 360.).floor();
+
     if 56. <= latitude && latitude < 64. && 3. <= longitude && longitude < 12. {
         return 32;
     }
@@ -529,6 +540,50 @@ mod tests {
         let (latitude, longitude) = wsg84_utm_to_lat_lon(easting, northing, 35, letter).unwrap();
         assert!(latitude.abs() < 1e-9, "latitude {}", latitude);
         assert!((longitude - 28.0).abs() < 1e-9, "longitude {}", longitude);
+    }
+
+    #[test]
+    fn zone_60_reaches_over_the_date_line() {
+        // PROJ: -178.5 E, 23.8 S, zone 60 -> 958724.569875, 7360636.327472 (zone 60 is centred on 177 E)
+        let (northing, easting, _) = to_utm_wgs84(-23.8, -178.5, 60);
+        assert!(
+            (easting - 958724.569875).abs() < 1e-3,
+            "easting {}",
+            easting
+        );
+        assert!(
+            (northing - 7360636.327472).abs() < 1e-3,
+            "northing {}",
+            northing
+        );
+        // the same point, with the longitude as 181.5 E, and in zone 1 (centred on 177 W)
+        let (northing, easting, _) = to_utm_wgs84(-23.8, 181.5, 60);
+        assert!((easting - 958724.569875).abs() < 1e-3 && (northing - 7360636.327472).abs() < 1e-3);
+        let (northing, easting, _) = to_utm_wgs84(-23.8, 178.5, 1);
+        assert!((easting - 41275.430125).abs() < 1e-3, "easting {}", easting);
+        assert!(
+            (northing - 7360636.327472).abs() < 1e-3,
+            "northing {}",
+            northing
+        );
+        // back: a longitude in [-180, 180)
+        let (latitude, longitude) =
+            wsg84_utm_to_lat_lon(958724.569875, 7360636.327472, 60, 'K').unwrap();
+        assert!(
+            (latitude + 23.8).abs() < 1e-6 && (longitude + 178.5).abs() < 1e-6,
+            "{} {}",
+            latitude,
+            longitude
+        );
+    }
+
+    #[test]
+    fn zone_numbers_are_1_to_60() {
+        assert_eq!(lat_lon_to_zone_number(10., 180.), 1);
+        assert_eq!(lat_lon_to_zone_number(10., -180.), 1);
+        assert_eq!(lat_lon_to_zone_number(10., 179.999), 60);
+        assert_eq!(lat_lon_to_zone_number(10., 190.), 2);
+        assert_eq!(lat_lon_to_zone_number(10., -190.), 59); // -190 is 170 E
     }
 
     fn is_close(a: f64, b: f64, epsilon: f64) -> bool {
